@@ -45,3 +45,8 @@ Use the left mouse click to hit zombies when they appear.
 Score points for every successful hit.
 
 Try to get the highest score possible!
+
+## DEMO Game Playing
+
+https://www.loom.com/share/6ed3bcfdab2d4f47b68753298e4ddd0e?sid=e4a6c79f-b68d-4a0e-95f5-76350ca48ac6
+
