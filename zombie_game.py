@@ -78,9 +78,9 @@ def safe_img(path, size=None):
     img = pygame.image.load(path).convert_alpha()
     return pygame.transform.smoothscale(img, size) if size else img
 
-zombie_img    = safe_img("zombie_head.png", (80,80))
-zombie_hit_img= safe_img("zombie_hit.png", (80,80))
-hammer_img    = safe_img("hammer.png", (110,110))
+zombie_img     = safe_img("zombie_head.png", (80,80))
+zombie_hit_img = safe_img("zombie_hit.png", (80,80))
+hammer_img     = safe_img("hammer.png", (110,110))
 
 # =============== HOLES ===============
 holes = [(150, 150), (350, 150), (550, 150),
@@ -101,13 +101,17 @@ def draw_text(text, fnt, color, x, y, center=False):
     else:
         screen.blit(img, (x, y))
 
-# =============== FX (shake, hitstop, particles) ===============
+# =============== FX (shake, hitstop, particles, cracks, float texts) ===============
 class FX:
     def __init__(self):
         self.shake_timer = 0
         self.shake_mag = 0
         self.hitstop_timer = 0
         self.particles = deque(maxlen=300)
+
+        # NEW:
+        self.cracks = deque(maxlen=60)   # vết nứt
+        self.texts  = deque(maxlen=30)   # chữ nổi
 
     def hitstop(self, ms=70): self.hitstop_timer = ms
     def shake(self, mag=6, ms=120): self.shake_mag, self.shake_timer = mag, ms
@@ -126,6 +130,27 @@ class FX:
                 "c": color
             })
 
+    # Bụi nhạt màu đất
+    def spawn_dust(self, pos, count=14, speed=3.0):
+        self.spawn_particles(pos, color=(185,170,130), count=count, speed=speed)
+
+    # Vết nứt nền (radial)
+    def spawn_crack(self, pos, branches=5, length_rng=(18, 36), life=1500):
+        cx, cy = pos
+        segs = []
+        for _ in range(branches):
+            ang = random.uniform(0, 2*math.pi)
+            L   = random.uniform(*length_rng)
+            x2  = cx + math.cos(ang)*L
+            y2  = cy + math.sin(ang)*L
+            segs.append(((cx, cy), (x2, y2)))
+        self.cracks.append({"segs": segs, "life": life, "t": 0})
+
+    # Chữ nổi
+    def add_text(self, text, pos, color=(255,255,255), life=800):
+        x, y = pos
+        self.texts.append({"text": text, "x": x, "y": y, "vy": -0.05, "life": life, "t": 0, "color": color})
+
     def update(self, dt):
         if self.hitstop_timer > 0:
             self.hitstop_timer -= dt
@@ -134,6 +159,7 @@ class FX:
             self.shake_timer -= dt
             if self.shake_timer < 0: self.shake_timer = 0
 
+        # particles
         alive = deque(maxlen=300)
         for p in self.particles:
             p["t"] += dt
@@ -143,6 +169,23 @@ class FX:
                 p["vy"] += p["g"] * (dt/16)
                 alive.append(p)
         self.particles = alive
+
+        # cracks
+        cracks_alive = deque(maxlen=60)
+        for c in self.cracks:
+            c["t"] += dt
+            if c["t"] < c["life"]:
+                cracks_alive.append(c)
+        self.cracks = cracks_alive
+
+        # floating texts
+        texts_alive = deque(maxlen=30)
+        for t in self.texts:
+            t["t"] += dt
+            if t["t"] < t["life"]:
+                t["y"] += t["vy"] * dt  # trôi lên nhẹ
+                texts_alive.append(t)
+        self.texts = texts_alive
 
     def offset(self):
         if self.shake_timer <= 0: return 0,0
@@ -156,13 +199,25 @@ class FX:
             col = (*p["c"], alpha)
             pygame.draw.circle(screen, col, (int(p["x"]), int(p["y"])), p["r"])
 
+    def draw_cracks(self, surf):
+        for c in self.cracks:
+            for (x1, y1), (x2, y2) in c["segs"]:
+                pygame.draw.line(surf, (80, 55, 40), (int(x1), int(y1)), (int(x2), int(y2)), 2)
+
+    def draw_floating_texts(self, surf):
+        for t in self.texts:
+            # dùng font trắng/đỏ/xanh nhạt đã set ở add_text
+            img = font.render(t["text"], True, t["color"])
+            rect = img.get_rect(center=(int(t["x"]), int(t["y"])))
+            surf.blit(img, rect)
+
 # =============== ZOMBIE ===============
 class Zombie:
     RISE_MS = 350
     IDLE_MS = 3000
     SINK_MS = 350
     HIT_SINK_MS = 230
-    
+
     def __init__(self, pos):
         self.base = pos
         self.state = "rising"
@@ -171,7 +226,7 @@ class Zombie:
         self.y_offset = 40
         self.scale = 0.8
         self.shadow_scale = 0.4
-        self.idle_bob_phase = random.uniform(0, math.tau)
+        self.idle_bob_phase = random.uniform(0, getattr(math, "tau", 2*math.pi))
 
     def try_hit(self, mx, my):
         if self.state in ("rising","idle") and not self.hit:
@@ -327,12 +382,38 @@ class Game:
                 self.fx.hitstop(65)
                 self.fx.shake(6, 110)
                 self.fx.spawn_particles(z.base, (210,40,40), count=14, speed=2.5)
+
+                # Chấm điểm theo khoảng cách đến tâm zombie tại thời điểm hit
+                zx, zy = z.base[0], z.base[1] + int(z.y_offset)
+                dist = math.hypot(mx - zx, my - zy)
+                if dist <= 18:
+                    label, col = "Perfect!", (255, 240, 120)
+                else:
+                    label, col = "Great!", (120, 220, 120)
+                self.fx.add_text(label, (z.base[0], z.base[1]-35), color=col, life=750)
                 return True
+
+        # MISS (đập hụt)
         self.miss += 1
         self.combo = 0
         if SND_MISS: SND_MISS.play()
         self.fx.shake(3, 60)
+        # Bụi + nứt tại vị trí click
+        self.fx.spawn_dust((mx, my), count=12, speed=3.0)
+        self.fx.spawn_crack((mx, my), branches=5, length_rng=(16, 34), life=1400)
+        self.fx.add_text("Miss!", (mx, my - 30), color=(255,80,80), life=900)
         return False
+
+    def register_escape_miss(self, z):
+        # Gọi khi zombie tự chìm xuống mà chưa bị hit
+        self.miss += 1
+        self.combo = 0
+        if SND_MISS: SND_MISS.play()
+        base = (z.base[0], z.base[1] + 28)
+        self.fx.spawn_dust(base, count=16, speed=2.4)
+        self.fx.spawn_crack(base, branches=6, length_rng=(20, 42), life=1700)
+        self.fx.add_text("Miss!", (z.base[0], z.base[1]-30), color=(255,80,80), life=900)
+        self.fx.shake(3, 60)
 
     def on_click(self, mx, my):
         if self.state == "playing":
@@ -362,8 +443,13 @@ class Game:
 
         alive = []
         for z in self.zombies:
-            if z.update(dt):
+            still = z.update(dt)
+            if still:
                 alive.append(z)
+            else:
+                # Zombie biến mất: nếu chưa bị hit => tính miss (escape)
+                if not z.hit:
+                    self.register_escape_miss(z)
         self.zombies = alive
 
         self.hammer.update()
@@ -376,10 +462,17 @@ class Game:
                              (0,y,W,40), 0, border_radius=8)
         for pos in holes:
             pygame.draw.circle(screen, (90, 60, 20), pos, 50)
+
+        # Vẽ zombie
         for z in self.zombies:
             z.draw(screen)
-        self.fx.draw_particles()
 
+        # FX
+        self.fx.draw_particles()
+        self.fx.draw_cracks(screen)
+        self.fx.draw_floating_texts(screen)
+
+        # HUD
         now = pygame.time.get_ticks()
         time_left = max(0, (self.game_end_time - now)//1000)
         draw_text(f"Time: {time_left}", font, (255,255,255), W-160, 10)
@@ -406,7 +499,7 @@ class Game:
         acc = self.current_acc()
         draw_text(f"Accuracy: {acc}%", font_medium, (255,255,255), cx, 245, center=True)
 
-        # Hiện kỷ lục hiện tại
+        # Kỷ lục
         if self.best:
             draw_text(f"Best: {self.best['acc']}% | {self.best['hit']} hits", font, (255,255,255), cx, 275, center=True)
         else:
