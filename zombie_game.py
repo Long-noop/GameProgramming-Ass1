@@ -1,5 +1,38 @@
-import pygame, random, sys, os, glob, math, time 
+import pygame, random, sys, os, glob, math, time, json
 from collections import deque
+
+# ===== High score (JSON) =====
+RECORD_PATH = "best_record.json"
+
+def load_best():
+    if os.path.isfile(RECORD_PATH):
+        try:
+            with open(RECORD_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return None
+    return None
+
+def save_best(data):
+    try:
+        with open(RECORD_PATH, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+def is_better(new, old):
+    """
+    Ưu tiên accuracy trước:
+    - Nếu new.acc >= old.acc thì MỚI xét tiếp hit.
+    - Và chỉ khi new.hit > old.hit thì coi là kỷ lục mới.
+    Ngược lại: không cập nhật.
+    Trường hợp chưa có kỷ lục (old is None) -> nhận new luôn.
+    """
+    if old is None:
+        return True
+    if new.get("acc", 0) >= old.get("acc", 0) and new.get("hit", 0) > old.get("hit", 0):
+        return True
+    return False
 
 # =============== INIT ===============
 pygame.init()
@@ -76,12 +109,8 @@ class FX:
         self.hitstop_timer = 0
         self.particles = deque(maxlen=300)
 
-    def hitstop(self, ms=70):
-        self.hitstop_timer = ms
-
-    def shake(self, mag=6, ms=120):
-        self.shake_mag = mag
-        self.shake_timer = ms
+    def hitstop(self, ms=70): self.hitstop_timer = ms
+    def shake(self, mag=6, ms=120): self.shake_mag, self.shake_timer = mag, ms
 
     def spawn_particles(self, pos, color=(200,30,30), count=12, speed=2.2):
         x,y = pos
@@ -101,7 +130,6 @@ class FX:
         if self.hitstop_timer > 0:
             self.hitstop_timer -= dt
             if self.hitstop_timer < 0: self.hitstop_timer = 0
-
         if self.shake_timer > 0:
             self.shake_timer -= dt
             if self.shake_timer < 0: self.shake_timer = 0
@@ -130,10 +158,10 @@ class FX:
 
 # =============== ZOMBIE ===============
 class Zombie:
-    RISE_MS = 350      # thời gian zombie trồi từ hố lên mặt đất
-    IDLE_MS = 3000     # thời gian zombie đứng yên trên mặt đất 
-    SINK_MS = 350      # thời gian zombie tự động chui xuống nếu không bị đập
-    HIT_SINK_MS = 230  # thời gian zombie chui xuống khi đã bị đập 
+    RISE_MS = 350
+    IDLE_MS = 3000
+    SINK_MS = 350
+    HIT_SINK_MS = 230
     
     def __init__(self, pos):
         self.base = pos
@@ -249,10 +277,23 @@ class Game:
         self.zombies = []
         self.wave_timer = 0
         self.game_end_time = 0
-        self.state = "playing"  
+        self.state = "playing"
 
         self.btn_rect = pygame.Rect(250, 280, 200, 50)
+        self.best = load_best()     # tải kỷ lục hiện có
+        self.saved_best = False
         self.reset()
+
+    def current_acc(self):
+        total = self.hit + self.miss
+        return int(self.hit/total*100) if total>0 else 0
+
+    def maybe_update_best(self):
+        new = {"hit": self.hit, "acc": self.current_acc()}
+        if is_better(new, self.best):
+            save_best(new)
+            self.best = new
+            self.saved_best = True
 
     def reset(self):
         now = pygame.time.get_ticks()
@@ -262,6 +303,7 @@ class Game:
         self.wave_timer = now + 1200
         self.game_end_time = now + 60000
         self.state = "playing"
+        self.saved_best = False
         try:
             pygame.mixer.music.play(-1)
             pygame.mixer.music.set_volume(0.4)
@@ -302,16 +344,16 @@ class Game:
 
     def update(self, dt):
         self.fx.update(dt)
-
         if self.state == "game_over":
             return
-
         if self.fx.hitstop_timer > 0:
             return
 
         now = pygame.time.get_ticks()
         if now >= self.game_end_time:
             self.state = "game_over"
+            if not self.saved_best:
+                self.maybe_update_best()
             return
 
         if now > self.wave_timer and not self.zombies:
@@ -328,17 +370,14 @@ class Game:
 
     def draw_world(self):
         screen.fill((46, 168, 82))
-
         for i in range(6):
             y = 90 + i*50
-            pygame.draw.rect(screen, (40, 150, 75) if i%2==0 else (44,160,80), (0,y,W,40), 0, border_radius=8)
-
+            pygame.draw.rect(screen, (40, 150, 75) if i%2==0 else (44,160,80),
+                             (0,y,W,40), 0, border_radius=8)
         for pos in holes:
             pygame.draw.circle(screen, (90, 60, 20), pos, 50)
-
         for z in self.zombies:
             z.draw(screen)
-
         self.fx.draw_particles()
 
         now = pygame.time.get_ticks()
@@ -346,13 +385,11 @@ class Game:
         draw_text(f"Time: {time_left}", font, (255,255,255), W-160, 10)
         draw_text(f"Hit: {self.hit}", font, (255,255,255), 10, 10)
         draw_text(f"Miss: {self.miss}", font, (255,255,255), 10, 40)
-        total = self.hit + self.miss
-        acc = int(self.hit/total*100) if total>0 else 0
+        acc = self.current_acc()
         draw_text(f"Acc: {acc}%", font, (255,255,255), 10, 70)
 
         if self.combo >= 2:
             draw_text(f"COMBO x{self.combo}", font_medium, (255,255,255), W//2, 20, center=True)
-
 
     def draw_game_over(self):
         s = pygame.Surface((W, H), pygame.SRCALPHA)
@@ -366,24 +403,27 @@ class Game:
         draw_text("Time's Up!", font_large, (255,223,0), cx, 100, center=True)
         draw_text(f"Hits: {self.hit}", font_medium, (255,255,255), cx, 165, center=True)
         draw_text(f"Misses: {self.miss}", font_medium, (255,255,255), cx, 205, center=True)
-        total = self.hit + self.miss
-        acc = int(self.hit/total*100) if total>0 else 0
+        acc = self.current_acc()
         draw_text(f"Accuracy: {acc}%", font_medium, (255,255,255), cx, 245, center=True)
 
+        # Hiện kỷ lục hiện tại
+        if self.best:
+            draw_text(f"Best: {self.best['acc']}% | {self.best['hit']} hits", font, (255,255,255), cx, 275, center=True)
+        else:
+            draw_text("Best: --", font, (200,200,200), cx, 275, center=True)
+
         self.btn_rect.centerx = cx
-        self.btn_rect.y = 290
+        self.btn_rect.y = 310
         pygame.draw.rect(screen, (0,177,64), self.btn_rect, border_radius=10)
-        draw_text("Tap to try again", font, (255,255,255), self.btn_rect.centerx, self.btn_rect.centery, center=True)
+        draw_text("Tap to try again", font, (255,255,255),
+                  self.btn_rect.centerx, self.btn_rect.centery, center=True)
 
     def draw(self, mx, my):
         ox, oy = self.fx.offset()
         self.draw_world()
-
         if self.state == "game_over":
             self.draw_game_over()
-
         self.hammer.draw(mx, my)
-
         if ox or oy:
             frame = screen.copy()
             screen.fill((46,168,82))
