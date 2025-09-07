@@ -5,6 +5,11 @@ screen = pygame.display.set_mode((700, 400))
 clock = pygame.time.Clock()
 font = pygame.font.SysFont(None, 36)
 
+# Load and play background music
+pygame.mixer.music.load("loon.mp3")
+pygame.mixer.music.play(-1)  # The -1 makes the music loop indefinitely
+pygame.mixer.music.set_volume(0.5) # Optional: Adjust the volume (0.0 to 1.0)
+
 # Load images
 zombie_img = pygame.image.load("zombie_head.png")
 zombie_img = pygame.transform.scale(zombie_img, (80, 80))
