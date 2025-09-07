@@ -130,10 +130,13 @@ while True:
         current_time = pygame.time.get_ticks()
         if current_time >= game_vars['game_end_time']:
             game_vars['game_state'] = 'game_over'
-
+            
+            
+        # Draw holes
         for pos in holes:
             pygame.draw.circle(screen, (90, 60, 20), pos, 50)
 
+        # Update hammer animation
         if hammer_phase > 0:
             elapsed = pygame.time.get_ticks() - hammer_timer
             if elapsed > hammer_duration:
@@ -145,15 +148,23 @@ while True:
                 elif hammer_phase == 2: hammer_angle = -30 + 120 * progress
                 elif hammer_phase == 3: hammer_angle = 30 - 90 * progress
 
+        # Spawns a new wave
         if current_time > game_vars['wave_timer']:
             spawn_new_wave()
             game_vars['wave_timer'] = current_time + 1500
 
+        # Process and draw zombies
         for zombie in game_vars['zombies'][:]:
             img_to_draw = zombie_hit_img if zombie['hit'] else zombie_img
             screen.blit(img_to_draw, (zombie['pos'][0] - 40, zombie['pos'][1] - 40))
+            
             if zombie['hit'] and pygame.time.get_ticks() - zombie['hit_timer'] > zombie_hit_duration:
                 game_vars['zombies'].remove(zombie)
+                
+        # If all zombies are cleared, spawn the next wave immediately
+        if not game_vars['zombies']:
+            spawn_new_wave()
+            game_vars['wave_timer'] = pygame.time.get_ticks() + 1500
 
         # Display the timer
         time_left = (game_vars['game_end_time'] - current_time) // 1000
