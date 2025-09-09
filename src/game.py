@@ -5,6 +5,14 @@ from zombie import Zombie
 from hammer import Hammer
 from utils import load_best, save_best, is_better, draw_text, safe_load_sound, safe_img
 
+#background
+BACKGROUND_IMG = pygame.image.load("../assets/2-800x501.png").convert()
+BACKGROUND_IMG = pygame.transform.scale(BACKGROUND_IMG, (W, H))
+
+#menu
+MENU_BG_IMG = safe_img("../assets/menu.png", (350, 395))
+
+
 SND_HIT  = safe_load_sound("../assets/hit.wav", 0.35)
 SND_POP  = safe_load_sound("../assets/pop.wav", 0.35)
 SND_MISS = safe_load_sound("../assets/miss.wav", 0.25)
@@ -27,6 +35,9 @@ class Game:
         self.paused_time = 0
         self.state = "playing"   # mặc định khởi động ở menu
         self.show_music = True   # setting: bật/tắt nhạc nền
+        
+        self.show_music = True
+        self.music_pos = 0  # lưu vị trí nhạc hiện tại
 
         # số lần miss tối đa
         self.max_miss = 6 # có thể chỉnh sửa
@@ -36,13 +47,26 @@ class Game:
         self.saved_best = False
         self.reset()
 
+    # def toggle_music(self):
+    #     self.show_music = not self.show_music
+    #     try:
+    #         if self.show_music:
+    #             pygame.mixer.music.play(-1)
+    #             pygame.mixer.music.set_volume(0.4)
+    #         else:
+    #             pygame.mixer.music.stop()
+    #     except Exception:
+    #         pass
     def toggle_music(self):
         self.show_music = not self.show_music
         try:
             if self.show_music:
-                pygame.mixer.music.play(-1)
+                # play tiếp tục từ vị trí cũ
+                pygame.mixer.music.play(-1, start=self.music_pos)
                 pygame.mixer.music.set_volume(0.4)
             else:
+                # lưu vị trí hiện tại trước khi pause
+                self.music_pos += pygame.mixer.music.get_pos() / 1000  # milliseconds -> seconds
                 pygame.mixer.music.stop()
         except Exception:
             pass
@@ -65,41 +89,31 @@ class Game:
         elif self.state == "settings":
             if self.music_btn.collidepoint((mx,my)):
                 self.toggle_music()
-            elif self.back_btn.collidepoint((mx,my)):
+            elif self.back_btn.collidepoint((mx,my)) or self.back_btn1.collidepoint((mx,my)):
                 self.game_end_time = pygame.time.get_ticks() + self.paused_time
                 self.state = "playing"
             elif self.end_btn.collidepoint((mx,my)):
                 self.state = "game_over"
 
     def draw_settings(self):
-        s = pygame.Surface((W, H), pygame.SRCALPHA)
-        s.fill((0,0,0,0))
-        screen.blit(s, (0,0))
+        # Overlay mờ toàn màn hình
+        overlay = pygame.Surface((W, H), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 0))
+        screen.blit(overlay, (0, 0))
 
-        popup = pygame.Rect(150, 50, 400, 320)  # khung settings
-        pygame.draw.rect(screen, (45,52,71), popup, border_radius=15)
+        # Popup menu dùng hình nền
+        popup = MENU_BG_IMG.get_rect(center=(W//2, H//2))
+        screen.blit(MENU_BG_IMG, popup)  # dùng ảnh nền menu
 
+        # Tọa độ trung tâm popup
         cx = popup.centerx
-        draw_text("Settings", font_large, (255,223,0), cx, 110, center=True)
 
-        # Nút bật/tắt nhạc
-        self.music_btn = pygame.Rect(cx-100, 160, 200, 50)
-        pygame.draw.rect(screen, (0,150,200), self.music_btn, border_radius=10)
-        label = "Music: ON" if self.show_music else "Music: OFF"
-        draw_text(label, font_medium, (255,255,255),
-                self.music_btn.centerx, self.music_btn.centery, center=True)
+        # Các nút invisible (vẫn click được)
+        self.back_btn = pygame.Rect(cx-100, 100, 200, 60)
+        self.back_btn1 = pygame.Rect(cx+120, 50, 50, 50)
+        self.music_btn  = pygame.Rect(popup.left + 180, popup.bottom-110, 60, 50)
+        self.end_btn   = pygame.Rect(cx-100, 170, 200, 60)
 
-        # Nút Back (bên trái dưới)
-        self.back_btn = pygame.Rect(popup.left + 30, popup.bottom - 70, 160, 50)
-        pygame.draw.rect(screen, (0,177,64), self.back_btn, border_radius=10)
-        draw_text("Back", font_medium, (255,255,255),
-                self.back_btn.centerx, self.back_btn.centery, center=True)
-
-        # Nút End Game (bên phải dưới)
-        self.end_btn = pygame.Rect(popup.right - 190, popup.bottom - 70, 160, 50)
-        pygame.draw.rect(screen, (200,50,50), self.end_btn, border_radius=10)
-        draw_text("End Game", font_medium, (255,255,255),
-                self.end_btn.centerx, self.end_btn.centery, center=True)
 
     def current_acc(self):
         total = self.hit + self.miss
@@ -242,11 +256,7 @@ class Game:
         self.hammer.update()
 
     def draw_world(self):
-        screen.fill((46, 168, 82))
-        for i in range(6):
-            y = 90 + i*50
-            pygame.draw.rect(screen, (40, 150, 75) if i%2==0 else (44,160,80),
-                             (0,y,W,40), 0, border_radius=8)
+        screen.blit(BACKGROUND_IMG, (0, 0))
         for pos in holes:
             pygame.draw.circle(screen, (90, 60, 20), pos, 50)
 
@@ -309,7 +319,7 @@ class Game:
             screen.blit(SETTINGS_BTN_IMG, SETTINGS_BTN_RECT)
 
         elif self.state == "settings":
-            self.draw_settings()
+            self.draw_settings() 
 
         # FX shake
         if ox or oy:
