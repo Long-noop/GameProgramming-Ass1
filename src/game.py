@@ -14,8 +14,8 @@ MENU_BG_IMG = safe_img("../assets/menu.png", (350, 395))
 
 
 SND_HIT  = safe_load_sound("../assets/hit.wav", 0.35)
-SND_POP  = safe_load_sound("../assets/pop.wav", 0.35)
-SND_MISS = safe_load_sound("../assets/miss.wav", 0.25)
+SND_POP  = safe_load_sound("../assets/pop.mp3", 0.35)
+SND_MISS = safe_load_sound("../assets/miss.mp3", 0.25)
 SETTINGS_BTN_IMG = safe_img("../assets/setting-button.webp", (40, 40))
 SETTINGS_BTN_RECT = SETTINGS_BTN_IMG.get_rect()
 SETTINGS_BTN_RECT.topleft = (10, H-50) 
