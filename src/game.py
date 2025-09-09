@@ -35,8 +35,8 @@ class Game:
         self.paused_time = 0
         self.state = "playing"   # mặc định khởi động ở menu
         self.show_music = True   # setting: bật/tắt nhạc nền
-        
-        self.show_music = True
+        self.sound_hit_enabled = True # setting: bật/tắt âm thanh hit
+        self.sound_btn = pygame.Rect(0,0,0,0)  # tạo trước để tránh AttributeError
         self.music_pos = 0  # lưu vị trí nhạc hiện tại
 
         # số lần miss tối đa
@@ -89,6 +89,8 @@ class Game:
         elif self.state == "settings":
             if self.music_btn.collidepoint((mx,my)):
                 self.toggle_music()
+            elif self.sound_btn.collidepoint((mx,my)):
+                self.sound_hit_enabled = not self.sound_hit_enabled
             elif self.back_btn.collidepoint((mx,my)) or self.back_btn1.collidepoint((mx,my)):
                 self.game_end_time = pygame.time.get_ticks() + self.paused_time
                 self.state = "playing"
@@ -113,8 +115,15 @@ class Game:
         self.back_btn1 = pygame.Rect(cx+120, 50, 50, 50)
         self.music_btn  = pygame.Rect(popup.left + 180, popup.bottom-110, 60, 50)
         self.end_btn   = pygame.Rect(cx-100, 170, 200, 60)
-
-
+        self.sound_btn  = pygame.Rect(popup.left + 95, popup.bottom-110, 60, 50)
+        if not self.show_music:
+            pygame.draw.line(screen, (255,0,0), 
+                (self.music_btn.left+5, self.music_btn.top+5),
+                (self.music_btn.right-5, self.music_btn.bottom-5), 4)
+        if not self.sound_hit_enabled:
+            pygame.draw.line(screen, (255,0,0), 
+                (self.sound_btn.left, self.sound_btn.top+5),
+                (self.sound_btn.right, self.sound_btn.bottom-5), 4)
     def current_acc(self):
         total = self.hit + self.miss
         return int(self.hit/total*100) if total>0 else 0
@@ -168,7 +177,8 @@ class Game:
                 self.combo += 1
                 self.combo_time = pygame.time.get_ticks()
                 # âm thanh & FX
-                if SND_HIT: SND_HIT.play()
+                if self.sound_hit_enabled and SND_HIT:
+                    SND_HIT.play()
                 self.fx.hitstop(65)
                 self.fx.shake(6, 110)
                 self.fx.spawn_particles(z.base, (210,40,40), count=14, speed=2.5)
