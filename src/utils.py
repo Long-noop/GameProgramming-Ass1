@@ -1,7 +1,10 @@
-import os, json, pygame, math
-from config import screen
+import os, json, pygame, sys
+from config import screen, clock
 
 RECORD_PATH = "best_record.json"
+font_small = pygame.font.SysFont(None, 28)
+font_medium = pygame.font.SysFont(None, 36)
+font_large = pygame.font.SysFont(None, 48)
 
 def load_best():
     if os.path.isfile(RECORD_PATH):
@@ -58,3 +61,27 @@ def draw_text(text, fnt, color, x, y, center=False):
         screen.blit(img, rect)
     else:
         screen.blit(img, (x, y))
+
+def intro_screen():
+    while True:
+        screen.fill((30, 30, 60))
+        draw_text("ZOMBIE WHACK!", font_large, (255, 200, 50), 180, 30)
+        info_font = pygame.font.SysFont(None, 20)
+        draw_text("!!! Game vay mượn hình ảnh, đồ họa từ tựa game huyền thoại Plants vs Zombies", info_font, (200, 255, 200), 100, 70)
+        draw_text("Luật chơi:", font_medium, (200, 255, 200), 50, 120)
+        draw_text("- Click chuột để dùng búa.", font_small, (255,255,255), 70, 160)
+        draw_text("- Đập trúng zombie: Hit +1 hoặc +2 (tùy loại zombie).", font_small, (255,255,255), 70, 190)
+        draw_text("- Đập hụt/ không đập: Miss +1.", font_small, (255,255,255), 70, 220)
+        draw_text("- Đập trúng hoa: Hit -1.", font_small, (255,255,255), 70, 250)
+        draw_text("Điểm số được tính = Hit/(Hit + Miss)", font_small, (255,255,255), 70, 280)
+        draw_text("Thời gian: 60 giây", font_small, (255,255,255), 70, 310)
+        
+        draw_text("Ấn ENTER để bắt đầu!", font_medium, (255,100,100), 200, 350)
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit(); sys.exit()
+            if event.type == pygame.KEYDOWN:
+                return  # thoát intro → vào game
+
+        pygame.display.update()

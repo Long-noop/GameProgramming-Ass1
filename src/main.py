@@ -1,9 +1,11 @@
 import pygame, sys
 from config import clock
 from game import Game
-from utils import safe_load_sound
+from utils import intro_screen
 
 def main():
+    intro_screen()
+    
     game = Game()
     offset_x, offset_y = -30, -30
 
@@ -13,7 +15,7 @@ def main():
         pygame.mixer.music.play(-1)
     except Exception as e:
         print("Không load được nhạc:", e)
-
+    
     while True:
         dt = clock.tick(60)
         mx, my = pygame.mouse.get_pos()
